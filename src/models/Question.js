@@ -6,8 +6,8 @@ const questionSchema = new mongoose.Schema({
   questionTitle: { type: String, required: true },
   linkCol: { type: String, required: true },
   timeCol: { type: String, required: true },
-  platform: { type: String }, // optional: 'leetcode', 'codeforces', etc.
-  problemUrl: { type: String }, // optional: full URL
+  platform: { type: String }, // 'leetcode', 'codeforces', etc.
+  problemUrl: { type: String }, // full URL to problem
   lastSeen: { type: Date, default: Date.now }
 });
 

@@ -4,6 +4,7 @@ const cors = require('cors');
 const connectDB = require('./config/db');
 const pingRoutes = require('./routes/ping');
 const apiRoutes = require('./routes/api');
+const adminRoutes = require('./routes/admin');
 
 // Connect to MongoDB
 connectDB();
@@ -22,6 +23,7 @@ app.use(express.json());
 // Routes
 app.use('/ping', pingRoutes);
 app.use('/api', apiRoutes);
+app.use('/admin', adminRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

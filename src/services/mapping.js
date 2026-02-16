@@ -1,18 +1,19 @@
 const Question = require('../models/Question');
+const GroupSheet = require('../models/GroupSheet');
 const { getSheetsClient } = require('../config/googleSheets');
 
 /**
- * Update mapping for all group sheets listed in environment variable.
+ * Update mapping for all tracked group sheets.
  */
 async function updateAllGroupSheetsMapping() {
-  const groupSheetIds = process.env.GROUP_SHEET_IDS?.split(',') || [];
-  console.log(`Updating mapping for ${groupSheetIds.length} group sheets`);
+  const groupSheets = await GroupSheet.find({});
+  console.log(`Updating mapping for ${groupSheets.length} group sheets`);
 
-  for (const sheetId of groupSheetIds) {
+  for (const group of groupSheets) {
     try {
-      await updateSheetMapping(sheetId);
+      await updateSheetMapping(group.sheetId);
     } catch (err) {
-      console.error(`Error updating sheet ${sheetId}:`, err);
+      console.error(`Error updating sheet ${group.sheetId}:`, err);
     }
   }
 }
