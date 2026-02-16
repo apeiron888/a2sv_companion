@@ -1,6 +1,6 @@
 const Student = require('../models/Student');
 const { decrypt } = require('../utils/encryption');
-const { getSheetsClient } = require('../config/googleSheets');
+const { getSheetsClient } = require('../config/googlesheets');
 
 /**
  * Get student by email, with decrypted token
