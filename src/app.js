@@ -30,6 +30,15 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin.html'));
 });
 
+// Auth status pages
+app.get('/auth/success', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/success.html'));
+});
+
+app.get('/auth/error', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/error.html'));
+});
+
 // API routes
 app.use('/ping', pingRoutes);
 app.use('/api', apiRoutes);
