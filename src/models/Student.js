@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 const studentSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
+  fullName: { type: String },
+  githubHandle: { type: String },
   groupSheetId: { type: String, required: true },
   rowNumber: { type: Number }, // cached row number
   githubToken: { type: String }, // encrypted

@@ -10,9 +10,9 @@ const CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 // Redirect user to GitHub for authorization
 exports.githubAuth = async (req, res) => {
   try {
-    const { email, groupSheetId: rawGroupSheetId, groupName, extensionId } = req.query;
-    if (!email || !extensionId || (!rawGroupSheetId && !groupName)) {
-      return res.status(400).send('Missing email, group name (or sheet id), or extensionId');
+    const { email, groupSheetId: rawGroupSheetId, groupName, studentName, githubHandle, extensionId } = req.query;
+    if (!email || !studentName || !githubHandle || !extensionId || (!rawGroupSheetId && !groupName)) {
+      return res.status(400).send('Missing email, full name, GitHub handle, group name (or sheet id), or extensionId');
     }
 
     let groupSheetId = rawGroupSheetId;
@@ -29,7 +29,14 @@ exports.githubAuth = async (req, res) => {
     }
 
     // Store data in state to retrieve later
-    const state = Buffer.from(JSON.stringify({ email, groupSheetId, groupName: resolvedGroupName, extensionId })).toString('base64');
+    const state = Buffer.from(JSON.stringify({
+      email,
+      groupSheetId,
+      groupName: resolvedGroupName,
+      studentName,
+      githubHandle,
+      extensionId
+    })).toString('base64');
 
     const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${CALLBACK_URL}&scope=repo&state=${state}`;
     res.redirect(url);
@@ -46,12 +53,14 @@ exports.githubCallback = async (req, res) => {
     return res.status(400).send('Missing code or state');
   }
 
-  let email, groupSheetId, groupName, extensionId;
+  let email, groupSheetId, groupName, studentName, githubHandle, extensionId;
   try {
     const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
     email = stateData.email;
     groupSheetId = stateData.groupSheetId;
     groupName = stateData.groupName;
+    studentName = stateData.studentName;
+    githubHandle = stateData.githubHandle;
     extensionId = stateData.extensionId;
   } catch (err) {
     return res.status(400).send('Invalid state');
@@ -97,6 +106,8 @@ exports.githubCallback = async (req, res) => {
       { email },
       {
         email,
+        fullName: studentName,
+        githubHandle,
         groupSheetId,
         githubToken: encrypted,
         githubTokenIV: iv,
