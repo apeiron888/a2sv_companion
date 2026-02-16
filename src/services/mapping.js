@@ -23,10 +23,34 @@ async function updateAllGroupSheetsMapping() {
  * Example: =HYPERLINK("https://leetcode.com/problems/two-sum/", "Two Sum")
  * Returns the URL or null if not found.
  */
-function extractUrlFromHyperlink(cellValue) {
-  if (typeof cellValue !== 'string') return null;
-  const match = cellValue.match(/=HYPERLINK\("([^"]+)"/);
-  return match ? match[1] : null;
+function extractUrlFromHyperlink(cell) {
+  if (!cell) return null;
+
+  if (cell.hyperlink) return cell.hyperlink;
+
+  if (cell.textFormatRuns && Array.isArray(cell.textFormatRuns)) {
+    const runWithLink = cell.textFormatRuns.find(run => run.format && run.format.link && run.format.link.uri);
+    if (runWithLink) return runWithLink.format.link.uri;
+  }
+
+  const formulaValue = cell.userEnteredValue && cell.userEnteredValue.formulaValue;
+  if (typeof formulaValue === 'string') {
+    const match = formulaValue.match(/=HYPERLINK\("([^"]+)"/);
+    return match ? match[1] : null;
+  }
+
+  return null;
+}
+
+function toColumnLetter(index) {
+  let n = index + 1;
+  let result = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    result = String.fromCharCode(65 + rem) + result;
+    n = Math.floor((n - 1) / 26);
+  }
+  return result;
 }
 
 /**
@@ -42,28 +66,36 @@ async function updateSheetMapping(sheetId) {
   const tabs = metadata.data.sheets.map(s => s.properties.title);
 
   for (const tab of tabs) {
-    // Read rows 1-5 to get headers
+    // Read rows 1-5 to get headers (need hyperlink info)
     const range = `${tab}!1:5`;
-    const response = await sheets.spreadsheets.values.get({
+    const response = await sheets.spreadsheets.get({
       spreadsheetId: sheetId,
-      range,
+      ranges: [range],
+      includeGridData: true,
     });
-    const rows = response.data.values || []; // rows[0] = row1, rows[1] = row2, ... rows[4] = row5
+    const grid = response.data.sheets && response.data.sheets[0] && response.data.sheets[0].data
+      ? response.data.sheets[0].data[0]
+      : null;
 
-    if (rows.length < 5) continue; // need at least 5 rows
+    if (!grid || !grid.rowData || grid.rowData.length < 5) continue;
 
-    const row4 = rows[3] || []; // platform row
-    const row5 = rows[4] || []; // question title row
+    const row4 = grid.rowData[3] || {}; // platform row
+    const row5 = grid.rowData[4] || {}; // question title row
+    const row4Values = row4.values || [];
+    const row5Values = row5.values || [];
 
-    // Start from column H (index 7)
-    for (let colIndex = 7; colIndex < row5.length; colIndex += 2) {
-      const linkCol = String.fromCharCode(65 + colIndex); // 0->A, 5->F
-      const timeCol = String.fromCharCode(65 + colIndex + 1);
-      const titleCell = row5[colIndex];
-      if (!titleCell || titleCell.trim() === '') continue; // empty cell, skip
+    // Start from column H (index 7), each question takes 2 columns
+    for (let colIndex = 7; colIndex < row5Values.length; colIndex += 2) {
+      const linkCol = toColumnLetter(colIndex);
+      const timeCol = toColumnLetter(colIndex + 1);
+      const titleCell = row5Values[colIndex];
+      const titleText = titleCell && titleCell.formattedValue ? titleCell.formattedValue.trim() : '';
+      if (!titleText) continue; // empty cell, skip
 
-      const questionTitle = titleCell.trim();
-      const platform = row4[colIndex] ? row4[colIndex].trim() : '';
+      const questionTitle = titleText;
+      const platformCell = row4Values[colIndex];
+      const platformText = platformCell && platformCell.formattedValue ? platformCell.formattedValue.trim() : '';
+      const platform = platformText ? platformText.toLowerCase() : '';
       const problemUrl = extractUrlFromHyperlink(titleCell);
 
       // Upsert into DB
