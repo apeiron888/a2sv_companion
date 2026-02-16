@@ -24,15 +24,16 @@ async function getStudentWithToken(email) {
  * Find the row number of a student in their group sheet.
  * Uses cached row number if still valid, otherwise searches and updates cache.
  * @param {Object} student - Student document with email, groupSheetId, and optional rowNumber
+ * @param {string} tabName - Sheet tab name to search within
  * @returns {number|null} 1-based row number or null if not found
  */
-async function findStudentRow(student) {
+async function findStudentRow(student, tabName) {
   const sheets = getSheetsClient();
   const sheetId = student.groupSheetId;
 
   // If we have a cached row number, verify it first
   if (student.rowNumber) {
-    const verifyRange = `A${student.rowNumber}`;
+    const verifyRange = tabName ? `${tabName}!A${student.rowNumber}` : `A${student.rowNumber}`;
     try {
       const verifyResponse = await sheets.spreadsheets.values.get({
         spreadsheetId: sheetId,
@@ -51,7 +52,7 @@ async function findStudentRow(student) {
   // Perform full search (column A, starting from row 6)
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: 'A:A',
+    range: tabName ? `${tabName}!A:A` : 'A:A',
   });
 
   const values = response.data.values || [];

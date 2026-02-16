@@ -24,7 +24,7 @@ exports.submit = async (req, res) => {
     }
 
     // 3. Find student's row in sheet
-    const rowNumber = await findStudentRow(student);
+    const rowNumber = await findStudentRow(student, question.tabName);
     if (!rowNumber) {
       return res.status(404).json({ error: 'Student row not found in sheet.' });
     }
