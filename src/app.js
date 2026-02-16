@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const pingRoutes = require('./routes/ping');
@@ -20,7 +21,15 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Routes
+// Serve static files (for admin UI)
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Admin UI route
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/admin.html'));
+});
+
+// API routes
 app.use('/ping', pingRoutes);
 app.use('/api', apiRoutes);
 app.use('/admin', adminRoutes);
