@@ -1,6 +1,6 @@
 const Question = require('../models/Question');
 const GroupSheet = require('../models/GroupSheet');
-const { getSheetsClient } = require('../config/googleSheets');
+const { getSheetsClient } = require('../config/googlesheets');
 
 /**
  * Update mapping for all tracked group sheets.

@@ -1,7 +1,7 @@
 const { getStudentWithToken, findStudentRow } = require('../services/student');
 const { findQuestionByTitle } = require('../services/questionMatcher');
 const { saveCodeToGitHub } = require('../services/github');
-const { getSheetsClient } = require('../config/googleSheets');
+const { getSheetsClient } = require('../config/googlesheets');
 const Submission = require('../models/Submission');
 
 exports.submit = async (req, res) => {
