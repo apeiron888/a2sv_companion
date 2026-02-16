@@ -63,7 +63,16 @@ async function updateSheetMapping(sheetId) {
 
   // Get spreadsheet metadata to list tabs
   const metadata = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
-  const tabs = metadata.data.sheets.map(s => s.properties.title);
+  const excludedTabs = new Set([
+    'Dashboard',
+    'Info Sheet',
+    'Attendance',
+    'Consistency Chart',
+    'Contest Progress'
+  ]);
+  const tabs = metadata.data.sheets
+    .map(s => s.properties.title)
+    .filter(title => !excludedTabs.has(title));
 
   for (const tab of tabs) {
     // Read rows 1-5 to get headers (need hyperlink info)
@@ -90,13 +99,21 @@ async function updateSheetMapping(sheetId) {
       const timeCol = toColumnLetter(colIndex + 1);
       const titleCell = row5Values[colIndex];
       const titleText = titleCell && titleCell.formattedValue ? titleCell.formattedValue.trim() : '';
-      if (!titleText) continue; // empty cell, skip
+      if (!titleText) {
+        console.log(`[mapping] Stop at empty question cell: tab=${tab}, col=${linkCol}`);
+        break; // stop when question header becomes empty
+      }
 
       const questionTitle = titleText;
       const platformCell = row4Values[colIndex];
       const platformText = platformCell && platformCell.formattedValue ? platformCell.formattedValue.trim() : '';
       const platform = platformText ? platformText.toLowerCase() : '';
       const problemUrl = extractUrlFromHyperlink(titleCell);
+
+      console.log(
+        `[mapping] sheet=${sheetId} tab=${tab} col=${linkCol}/${timeCol} ` +
+        `title="${questionTitle}" platform="${platform}" url=${problemUrl || 'null'}`
+      );
 
       // Upsert into DB
       await Question.findOneAndUpdate(
