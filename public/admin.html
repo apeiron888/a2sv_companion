@@ -82,9 +82,15 @@
 
         <div id="listTab" class="tab-content bg-white rounded-lg shadow p-6 hidden">
             <h2 class="text-xl font-semibold mb-4">Tracked Group Sheets</h2>
-            <button onclick="listSheets()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mb-4 flex items-center gap-2">
-                <i class="fas fa-sync-alt"></i> Refresh List
-            </button>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button onclick="listSheets()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-sync-alt"></i> Refresh List
+                </button>
+                <button onclick="refreshMapping()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-bolt"></i> Refresh Mapping Now
+                </button>
+            </div>
+            <div id="mappingStatus" class="text-sm text-gray-600 mb-2"></div>
             <div id="listContainer" class="max-h-96 overflow-y-auto border border-gray-200 rounded">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -228,6 +234,32 @@
                 }
             } catch (err) {
                 tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center text-red-500">Network error</td></tr>';
+            }
+        }
+
+        // Refresh mapping
+        async function refreshMapping() {
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                alert('Please save your API key first.');
+                return;
+            }
+            const status = document.getElementById('mappingStatus');
+            status.textContent = 'Refreshing mapping...';
+
+            try {
+                const response = await fetch('/admin/refresh-mapping', {
+                    method: 'POST',
+                    headers: { 'x-api-key': apiKey }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = 'Mapping refresh completed.';
+                } else {
+                    status.textContent = `Error: ${data.error || 'Unknown'}`;
+                }
+            } catch (err) {
+                status.textContent = 'Network error while refreshing mapping.';
             }
         }
 
