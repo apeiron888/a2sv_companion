@@ -13,12 +13,15 @@ async function findQuestionByTitle(groupSheetId, submittedTitle) {
   const questions = await Question.find({ groupSheetId });
 
   // Normalize submitted title
+  if (!submittedTitle || typeof submittedTitle !== 'string') return null;
   const normalizedSubmitted = submittedTitle.toLowerCase().trim();
+  if (!normalizedSubmitted) return null;
 
   let bestMatch = null;
   let bestScore = 0;
 
   questions.forEach(q => {
+    if (!q.questionTitle || typeof q.questionTitle !== 'string') return;
     const normalizedStored = q.questionTitle.toLowerCase().trim();
     const score = fuzzy.ratio(normalizedSubmitted, normalizedStored);
     if (score > bestScore && score >= THRESHOLD) {

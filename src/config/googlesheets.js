@@ -8,9 +8,23 @@ const getSheetsClient = () => {
   const base64Key = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64;
   if (!base64Key) throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_KEY_BASE64');
 
-  const credentials = JSON.parse(
-    Buffer.from(base64Key, 'base64').toString('utf8')
-  );
+  let credentials;
+  const trimmed = base64Key.trim();
+  const tryParseJson = (value) => {
+    const cleaned = value.replace(/^\uFEFF/, '');
+    return JSON.parse(cleaned);
+  };
+
+  try {
+    if (trimmed.startsWith('{')) {
+      credentials = tryParseJson(trimmed);
+    } else {
+      const decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+      credentials = tryParseJson(decoded);
+    }
+  } catch (err) {
+    throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT_KEY_BASE64. Provide valid base64 JSON or raw JSON.');
+  }
 
   const auth = new google.auth.GoogleAuth({
     credentials,
