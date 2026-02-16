@@ -1,4 +1,5 @@
 const GroupSheet = require('../models/GroupSheet');
+const { updateAllGroupSheetsMapping } = require('../services/mapping');
 
 // Simple API key check middleware (can be used as separate middleware)
 const checkAdminKey = (req, res, next) => {
@@ -54,6 +55,17 @@ exports.listSheets = async (req, res) => {
     res.json({ sheets });
   } catch (error) {
     console.error('Error listing sheets:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Manually refresh mapping for all tracked sheets
+exports.refreshMapping = async (req, res) => {
+  try {
+    await updateAllGroupSheetsMapping();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error refreshing mapping:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

@@ -31,7 +31,7 @@ function extractUrlFromHyperlink(cellValue) {
 
 /**
  * Update mapping for a single group sheet.
- * Reads headers (rows 1-5) from each tab, finds question pairs starting from column F,
+ * Reads headers (rows 1-5) from each tab, finds question pairs starting from column H,
  * extracts platform (row4) and question title (row5), and upserts into DB.
  */
 async function updateSheetMapping(sheetId) {
@@ -55,8 +55,8 @@ async function updateSheetMapping(sheetId) {
     const row4 = rows[3] || []; // platform row
     const row5 = rows[4] || []; // question title row
 
-    // Start from column F (index 5)
-    for (let colIndex = 5; colIndex < row5.length; colIndex += 2) {
+    // Start from column H (index 7)
+    for (let colIndex = 7; colIndex < row5.length; colIndex += 2) {
       const linkCol = String.fromCharCode(65 + colIndex); // 0->A, 5->F
       const timeCol = String.fromCharCode(65 + colIndex + 1);
       const titleCell = row5[colIndex];
