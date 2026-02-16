@@ -1,8 +1,8 @@
 {
   "name": "a2sv_companion",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A2SV Companion automating student submissions to GitHub repos and tracking progress via Google Sheets.",
+  "main": "src/app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/app.js",
