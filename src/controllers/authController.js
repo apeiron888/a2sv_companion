@@ -10,9 +10,9 @@ const CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 // Redirect user to GitHub for authorization
 exports.githubAuth = async (req, res) => {
   try {
-    const { email, groupSheetId: rawGroupSheetId, groupName, studentName, githubHandle, repoName, extensionId } = req.query;
-    if (!email || !studentName || !githubHandle || !extensionId || (!rawGroupSheetId && !groupName)) {
-      return res.status(400).send('Missing email, full name, GitHub handle, group name (or sheet id), or extensionId');
+    const { email, groupSheetId: rawGroupSheetId, groupName, studentName, githubHandle, repoName } = req.query;
+    if (!email || !studentName || !githubHandle || (!rawGroupSheetId && !groupName)) {
+      return res.status(400).send('Missing email, full name, GitHub handle, or group name (or sheet id)');
     }
 
     let groupSheetId = rawGroupSheetId;
@@ -36,7 +36,7 @@ exports.githubAuth = async (req, res) => {
       studentName,
       githubHandle,
       repoName,
-      extensionId
+      extensionId: req.query.extensionId
     })).toString('base64');
 
     const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${CALLBACK_URL}&scope=repo&state=${state}`;
@@ -125,11 +125,39 @@ exports.githubCallback = async (req, res) => {
     );
 
     // Build success redirect URL using extensionId
-    const successUrl = `chrome-extension://${extensionId}/success.html`;
-    res.redirect(successUrl);
+    if (extensionId) {
+      const successUrl = `chrome-extension://${extensionId}/success.html`;
+      return res.redirect(successUrl);
+    }
+    if (process.env.AUTH_SUCCESS_URL) {
+      return res.redirect(process.env.AUTH_SUCCESS_URL);
+    }
+    return res.send('GitHub connected. You can close this tab and return to the extension.');
   } catch (error) {
     console.error('GitHub OAuth error:', error);
-    const errorUrl = `chrome-extension://${extensionId}/error.html`;
-    res.redirect(errorUrl);
+    if (extensionId) {
+      const errorUrl = `chrome-extension://${extensionId}/error.html`;
+      return res.redirect(errorUrl);
+    }
+    if (process.env.AUTH_ERROR_URL) {
+      return res.redirect(process.env.AUTH_ERROR_URL);
+    }
+    return res.status(500).send('GitHub OAuth failed. Please retry from the extension.');
+  }
+};
+
+// Check if GitHub is connected for a given email
+exports.githubStatus = async (req, res) => {
+  try {
+    const { email } = req.query;
+    if (!email) {
+      return res.status(400).json({ error: 'Missing email' });
+    }
+    const student = await Student.findOne({ email });
+    const connected = !!(student && student.githubToken && student.githubTokenIV && student.githubTokenAuthTag);
+    return res.json({ connected, githubUsername: student?.githubUsername || null, repoName: student?.repoName || null });
+  } catch (error) {
+    console.error('GitHub status error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };

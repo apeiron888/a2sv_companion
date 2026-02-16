@@ -6,7 +6,7 @@ const connectDB = require('./config/db');
 const pingRoutes = require('./routes/ping');
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
-const { githubAuth, githubCallback } = require('./controllers/authController');
+const { githubAuth, githubCallback, githubStatus } = require('./controllers/authController');
 
 // Connect to MongoDB
 connectDB();
@@ -38,6 +38,7 @@ app.use('/admin', adminRoutes);
 // Direct auth routes (fallback for deployments missing /api routing)
 app.get('/api/auth/github', githubAuth);
 app.get('/api/auth/github/callback', githubCallback);
+app.get('/api/auth/github/status', githubStatus);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
