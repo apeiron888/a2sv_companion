@@ -10,7 +10,7 @@ const CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 // Redirect user to GitHub for authorization
 exports.githubAuth = async (req, res) => {
   try {
-    const { email, groupSheetId: rawGroupSheetId, groupName, studentName, githubHandle, extensionId } = req.query;
+    const { email, groupSheetId: rawGroupSheetId, groupName, studentName, githubHandle, repoName, extensionId } = req.query;
     if (!email || !studentName || !githubHandle || !extensionId || (!rawGroupSheetId && !groupName)) {
       return res.status(400).send('Missing email, full name, GitHub handle, group name (or sheet id), or extensionId');
     }
@@ -35,6 +35,7 @@ exports.githubAuth = async (req, res) => {
       groupName: resolvedGroupName,
       studentName,
       githubHandle,
+      repoName,
       extensionId
     })).toString('base64');
 
@@ -53,7 +54,7 @@ exports.githubCallback = async (req, res) => {
     return res.status(400).send('Missing code or state');
   }
 
-  let email, groupSheetId, groupName, studentName, githubHandle, extensionId;
+  let email, groupSheetId, groupName, studentName, githubHandle, repoName, extensionId;
   try {
     const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
     email = stateData.email;
@@ -61,6 +62,7 @@ exports.githubCallback = async (req, res) => {
     groupName = stateData.groupName;
     studentName = stateData.studentName;
     githubHandle = stateData.githubHandle;
+    repoName = stateData.repoName;
     extensionId = stateData.extensionId;
   } catch (err) {
     return res.status(400).send('Invalid state');
@@ -102,19 +104,23 @@ exports.githubCallback = async (req, res) => {
     const { encrypted, iv, authTag } = encrypt(accessToken);
 
     // Upsert student record
+    const updateDoc = {
+      email,
+      fullName: studentName,
+      githubHandle,
+      groupSheetId,
+      githubToken: encrypted,
+      githubTokenIV: iv,
+      githubTokenAuthTag: authTag,
+      githubUsername,
+    };
+    if (repoName) {
+      updateDoc.repoName = repoName;
+    }
+
     await Student.findOneAndUpdate(
       { email },
-      {
-        email,
-        fullName: studentName,
-        githubHandle,
-        groupSheetId,
-        githubToken: encrypted,
-        githubTokenIV: iv,
-        githubTokenAuthTag: authTag,
-        githubUsername,
-        // repoName defaults; can be updated later
-      },
+      updateDoc,
       { upsert: true, new: true }
     );
 
