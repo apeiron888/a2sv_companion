@@ -15,6 +15,10 @@ exports.githubAuth = async (req, res) => {
       return res.status(400).send('Missing email, full name, GitHub handle, or group name (or sheet id)');
     }
 
+    if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET || !CALLBACK_URL) {
+      return res.status(500).send('GitHub OAuth is not configured on the server. Missing GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, or GITHUB_CALLBACK_URL.');
+    }
+
     let groupSheetId = rawGroupSheetId;
     let resolvedGroupName = groupName;
 
@@ -93,6 +97,9 @@ exports.githubCallback = async (req, res) => {
     });
 
     const accessToken = tokenResponse.data.access_token;
+    if (!accessToken) {
+      return res.status(401).send('GitHub OAuth failed: access token not returned. Check your GitHub app client ID/secret and callback URL.');
+    }
 
     // Get user info to store username
     const userResponse = await axios.get('https://api.github.com/user', {
@@ -142,7 +149,8 @@ exports.githubCallback = async (req, res) => {
     if (process.env.AUTH_ERROR_URL) {
       return res.redirect(process.env.AUTH_ERROR_URL);
     }
-    return res.status(500).send('GitHub OAuth failed. Please retry from the extension.');
+    const errorDesc = error?.response?.data?.error_description || error?.response?.data?.error || error.message;
+    return res.status(500).send(`GitHub OAuth failed. ${errorDesc || 'Please retry from the extension.'}`);
   }
 };
 
