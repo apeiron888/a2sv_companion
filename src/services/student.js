@@ -30,6 +30,8 @@ async function getStudentWithToken(email) {
 async function findStudentRow(student, tabName) {
   const sheets = getSheetsClient();
   const sheetId = student.groupSheetId;
+  const email = (student.email || '').trim().toLowerCase();
+  const fullName = (student.fullName || '').trim().toLowerCase();
 
   // If we have a cached row number, verify it first
   if (student.rowNumber) {
@@ -39,8 +41,9 @@ async function findStudentRow(student, tabName) {
         spreadsheetId: sheetId,
         range: verifyRange,
       });
-      const cellValue = verifyResponse.data.values?.[0]?.[0];
-      if (cellValue === student.email) {
+      const cellValueRaw = verifyResponse.data.values?.[0]?.[0];
+      const cellValue = cellValueRaw ? String(cellValueRaw).trim().toLowerCase() : '';
+      if ((email && cellValue === email) || (fullName && cellValue === fullName)) {
         return student.rowNumber; // cache still valid
       }
     } catch (err) {
@@ -59,7 +62,9 @@ async function findStudentRow(student, tabName) {
   // Headers are rows 1-5, student data starts at row 6 (index 5)
   for (let i = 5; i < values.length; i++) {
     const row = values[i];
-    if (row && row[0] === student.email) {
+    const cellValueRaw = row && row[0] ? row[0] : '';
+    const cellValue = cellValueRaw ? String(cellValueRaw).trim().toLowerCase() : '';
+    if ((email && cellValue === email) || (fullName && cellValue === fullName)) {
       const foundRow = i + 1; // 1-based row number
 
       // Update cached row number in database
