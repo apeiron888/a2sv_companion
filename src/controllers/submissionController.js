@@ -67,7 +67,7 @@ exports.submit = async (req, res) => {
       spreadsheetId: sheetId,
       range: linkCell,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[`=HYPERLINK("${htmlUrl}", "Trial ${trial}")`]] }
+      requestBody: { values: [[`=HYPERLINK("${htmlUrl}", "${trial}")`]] }
     });
 
     // Set time cell
