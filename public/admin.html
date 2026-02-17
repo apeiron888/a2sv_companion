@@ -10,21 +10,66 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         .tab-active {
-            border-bottom: 2px solid #3b82f6;
-            color: #3b82f6;
+            border-bottom: 2px solid #111827;
+            color: #111827;
+        }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+        .btn-primary {
+            background: #111827;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #0f172a; }
+        .btn-danger { background: #ef4444; color: #fff; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-success { background: #10b981; color: #fff; }
+        .btn-success:hover { background: #059669; }
+        .btn-soft { background: #f3f4f6; color: #111827; }
+        .btn-soft:hover { background: #e5e7eb; }
+        .input {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px 12px;
+            outline: none;
+        }
+        .input:focus {
+            border-color: #111827;
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1);
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            color: #6b7280;
         }
     </style>
 </head>
 <body class="bg-gray-100">
-    <div class="max-w-4xl mx-auto py-8 px-4">
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">A2SV Companion Admin</h1>
+    <div class="max-w-5xl mx-auto py-10 px-4">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="h-12 w-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center font-bold">A2SV</div>
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">A2SV Companion Admin</h1>
+                <p class="text-sm text-gray-500">Manage group sheets and refresh mappings.</p>
+            </div>
+        </div>
 
         <!-- API Key Section -->
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
+        <div class="card p-6 mb-6">
             <label class="block text-sm font-medium text-gray-700 mb-2">API Key</label>
-            <div class="flex gap-2">
-                <input type="password" id="apiKey" placeholder="Enter your admin API key" class="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="saveApiKey()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input type="password" id="apiKey" placeholder="Enter your admin API key" class="flex-1 input">
+                <button onclick="saveApiKey()" class="btn-primary px-4 py-2 rounded flex items-center gap-2 justify-center">
                     <i class="fas fa-save"></i> Save Key
                 </button>
             </div>
@@ -47,51 +92,51 @@
         </div>
 
         <!-- Tab Content -->
-        <div id="addTab" class="tab-content bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4">Add New Group Sheet</h2>
+        <div id="addTab" class="tab-content card p-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900">Add New Group Sheet</h2>
             <form id="addForm" onsubmit="addSheet(event)">
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Sheet ID <span class="text-red-500">*</span></label>
-                    <input type="text" id="sheetId" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="text" id="sheetId" required class="w-full input">
                     <p class="text-xs text-gray-500 mt-1">The Google Sheet ID (from the URL)</p>
                 </div>
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Name (optional)</label>
-                    <input type="text" id="sheetName" class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="text" id="sheetName" class="w-full input">
                 </div>
-                <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                <button type="submit" class="btn-success px-4 py-2 rounded flex items-center gap-2">
                     <i class="fas fa-plus-circle"></i> Add Sheet
                 </button>
             </form>
             <div id="addMessage" class="mt-4"></div>
         </div>
 
-        <div id="removeTab" class="tab-content bg-white rounded-lg shadow p-6 hidden">
-            <h2 class="text-xl font-semibold mb-4">Remove Group Sheet</h2>
+        <div id="removeTab" class="tab-content card p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900">Remove Group Sheet</h2>
             <form id="removeForm" onsubmit="removeSheet(event)">
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1">Sheet ID <span class="text-red-500">*</span></label>
-                    <input type="text" id="removeSheetId" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="text" id="removeSheetId" required class="w-full input">
                 </div>
-                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                <button type="submit" class="btn-danger px-4 py-2 rounded flex items-center gap-2">
                     <i class="fas fa-trash-alt"></i> Remove Sheet
                 </button>
             </form>
             <div id="removeMessage" class="mt-4"></div>
         </div>
 
-        <div id="listTab" class="tab-content bg-white rounded-lg shadow p-6 hidden">
-            <h2 class="text-xl font-semibold mb-4">Tracked Group Sheets</h2>
+        <div id="listTab" class="tab-content card p-6 hidden">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900">Tracked Group Sheets</h2>
             <div class="flex flex-wrap gap-2 mb-4">
-                <button onclick="listSheets()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                <button onclick="listSheets()" class="btn-soft px-4 py-2 rounded flex items-center gap-2">
                     <i class="fas fa-sync-alt"></i> Refresh List
                 </button>
-                <button onclick="refreshMapping()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                <button onclick="refreshMapping()" class="btn-success px-4 py-2 rounded flex items-center gap-2">
                     <i class="fas fa-bolt"></i> Refresh Mapping Now
                 </button>
             </div>
             <div id="mappingStatus" class="text-sm text-gray-600 mb-2"></div>
-            <div id="listContainer" class="max-h-96 overflow-y-auto border border-gray-200 rounded">
+            <div id="listContainer" class="max-h-96 overflow-y-auto border border-gray-200 rounded-xl">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
