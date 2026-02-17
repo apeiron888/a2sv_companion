@@ -116,17 +116,36 @@ async function updateSheetMapping(sheetId) {
       );
 
       // Upsert into DB
-      await Question.findOneAndUpdate(
-        { groupSheetId: sheetId, tabName: tab, linkCol },
-        {
-          questionTitle,
-          platform,
-          problemUrl,
-          timeCol,
-          lastSeen: new Date()
-        },
-        { upsert: true }
-      );
+      try {
+        const saved = await Question.findOneAndUpdate(
+          { groupSheetId: sheetId, tabName: tab, linkCol },
+          {
+            questionTitle,
+            platform,
+            problemUrl,
+            timeCol,
+            lastSeen: new Date()
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+        );
+
+        console.log(
+          `[mapping] saved question id=${saved?._id || 'null'} ` +
+          `sheet=${sheetId} tab=${tab} col=${linkCol}/${timeCol}`
+        );
+      } catch (err) {
+        console.error(
+          `[mapping] failed to save question sheet=${sheetId} tab=${tab} col=${linkCol}/${timeCol}:`,
+          err
+        );
+      }
+    }
+
+    try {
+      const count = await Question.countDocuments({ groupSheetId: sheetId, tabName: tab });
+      console.log(`[mapping] tab=${tab} totalQuestions=${count}`);
+    } catch (err) {
+      console.warn(`[mapping] failed to count questions for tab=${tab}:`, err.message);
     }
 
     // Optional: remove questions not seen in last N days
