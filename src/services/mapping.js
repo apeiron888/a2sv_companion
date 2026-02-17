@@ -98,7 +98,11 @@ async function updateSheetMapping(sheetId) {
       const linkCol = toColumnLetter(colIndex);
       const timeCol = toColumnLetter(colIndex + 1);
       const titleCell = row5Values[colIndex];
-      const titleText = titleCell && titleCell.formattedValue ? titleCell.formattedValue.trim() : '';
+      const titleFromEntered = titleCell && titleCell.userEnteredValue && titleCell.userEnteredValue.stringValue
+        ? titleCell.userEnteredValue.stringValue
+        : '';
+      const titleFromFormatted = titleCell && titleCell.formattedValue ? titleCell.formattedValue : '';
+      const titleText = (titleFromEntered || titleFromFormatted || '').trim();
       if (!titleText) {
         console.log(`[mapping] Stop at empty question cell: tab=${tab}, col=${linkCol}`);
         break; // stop when question header becomes empty

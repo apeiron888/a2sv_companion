@@ -9,7 +9,7 @@ const { retry } = require('../utils/retry');
  * @param {string} path - file path (e.g., 'leetcode/two-sum.js')
  * @param {string} content - file content
  * @param {string} message - commit message
- * @returns {Promise<string>} raw URL of the file
+ * @returns {Promise<{rawUrl: string, htmlUrl: string}>} raw and HTML URLs of the file
  */
 async function saveCodeToGitHub(token, owner, repo, path, content, message) {
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
@@ -45,7 +45,8 @@ async function saveCodeToGitHub(token, owner, repo, path, content, message) {
 
     // Construct raw URL (assuming main branch)
     const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/main/${path}`;
-    return rawUrl;
+    const htmlUrl = `https://github.com/${owner}/${repo}/blob/main/${path}`;
+    return { rawUrl, htmlUrl };
   };
 
   return retry(operation, 3, 1000);

@@ -6,7 +6,7 @@ const Submission = require('../models/Submission');
 
 exports.submit = async (req, res) => {
   try {
-    const { email, platform, problemTitle, code, timeTaken, trial, language } = req.body;
+    const { email, platform, problemTitle, problemUrl, code, timeTaken, trial, language } = req.body;
 
     // 1. Get student and token
     const student = await getStudentWithToken(email);
@@ -18,7 +18,7 @@ exports.submit = async (req, res) => {
     }
 
     // 2. Find question in mapping for this group
-    const question = await findQuestionByTitle(student.groupSheetId, problemTitle);
+    const question = await findQuestionByTitle(student.groupSheetId, problemTitle, problemUrl, platform);
     if (!question) {
       return res.status(404).json({ error: 'Question not found in any sheet tab. It may not be synced yet.' });
     }
@@ -31,12 +31,22 @@ exports.submit = async (req, res) => {
 
     // 4. Prepare GitHub file path
     const slug = problemTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const fileExt = language === 'python' ? 'py' : language === 'java' ? 'java' : language === 'c++' ? 'cpp' : 'js';
-    const path = `${platform}/${slug}_trial${trial}.${fileExt}`;
+    const normalizedPlatform = platform ? platform.toLowerCase() : 'unknown';
+    const fileExt = language === 'python' ? 'py'
+      : language === 'java' ? 'java'
+      : language === 'c++' ? 'cpp'
+      : language === 'javascript' ? 'js'
+      : language === 'c#' ? 'cs'
+      : language === 'go' ? 'go'
+      : language === 'kotlin' ? 'kt'
+      : language === 'rust' ? 'rs'
+      : language === 'php' ? 'php'
+      : 'txt';
+    const path = `${normalizedPlatform}/${slug}_trial${trial}.${fileExt}`;
     const commitMessage = `Add solution for ${problemTitle} (trial ${trial})`;
 
     // 5. Save code to GitHub using student's token
-    const rawUrl = await saveCodeToGitHub(
+    const { rawUrl, htmlUrl } = await saveCodeToGitHub(
       student.githubTokenDecrypted,
       student.githubUsername,
       student.repoName,
@@ -57,7 +67,7 @@ exports.submit = async (req, res) => {
       spreadsheetId: sheetId,
       range: linkCell,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[`=HYPERLINK("${rawUrl}", "Solution")`]] }
+      requestBody: { values: [[`=HYPERLINK("${htmlUrl}", "Trial ${trial}")`]] }
     });
 
     // Set time cell
@@ -73,7 +83,7 @@ exports.submit = async (req, res) => {
       studentId: student._id,
       questionId: question._id,
       attempt: trial,
-      codeUrl: rawUrl,
+      codeUrl: htmlUrl,
       timeTaken
     });
 
