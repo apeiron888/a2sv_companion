@@ -43,7 +43,7 @@ exports.githubAuth = async (req, res) => {
       extensionId: req.query.extensionId
     })).toString('base64');
 
-    const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${CALLBACK_URL}&scope=repo&state=${state}`;
+    const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${CALLBACK_URL}&scope=public_repo&state=${state}`;
     res.redirect(url);
   } catch (error) {
     console.error('GitHub OAuth init error:', error);
