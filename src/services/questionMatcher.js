@@ -41,12 +41,41 @@ async function findQuestionByTitle(groupSheetId, submittedTitle, problemUrl, pla
       : null;
 
   const normalizedUrl = normalizeUrl(problemUrl);
+  const baseQuery = { groupSheetId };
+  if (normalizedPlatform) baseQuery.platform = normalizedPlatform;
+
+  // ── 0. Direct DB exact URL match (fast path) ───────────────────────────────
+  if (normalizedUrl) {
+    const allUrlCandidates = [
+      problemUrl,
+      normalizedUrl,
+      String(problemUrl || '').trim(),
+      String(problemUrl || '').trim().replace(/\/$/, ''),
+    ].filter(Boolean);
+
+    const exactByUrl = await Question.findOne({
+      ...baseQuery,
+      problemUrl: { $in: [...new Set(allUrlCandidates)] },
+    });
+    if (exactByUrl) return exactByUrl;
+  }
+
+  // ── 0.5 Direct DB exact title match (fast path) ────────────────────────────
+  if (submittedTitle && typeof submittedTitle === 'string') {
+    const normalizedSubmitted = submittedTitle.toLowerCase().trim();
+    if (normalizedSubmitted) {
+      const escaped = normalizedSubmitted.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const exactByTitle = await Question.findOne({
+        ...baseQuery,
+        questionTitle: new RegExp(`^${escaped}$`, 'i'),
+      });
+      if (exactByTitle) return exactByTitle;
+    }
+  }
 
   // ── Build an efficient DB query ──────────────────────────────────────────────
   // Use platform index if available to limit the candidate set
-  const query = { groupSheetId };
-  if (normalizedPlatform) query.platform = normalizedPlatform;
-  const questions = await Question.find(query);
+  const questions = await Question.find(baseQuery).lean();
 
   // ── 1. Exact URL match ───────────────────────────────────────────────────────
   if (normalizedUrl) {

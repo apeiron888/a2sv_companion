@@ -1,6 +1,35 @@
 const axios = require('axios');
 const { retry } = require('../utils/retry');
 
+async function ensureRepoExists(token, owner, repo) {
+  const repoApi = `https://api.github.com/repos/${owner}/${repo}`;
+  try {
+    await axios.get(repoApi, {
+      headers: { Authorization: `token ${token}` },
+    });
+    return;
+  } catch (err) {
+    if (err.response?.status !== 404) {
+      throw err;
+    }
+  }
+
+  // Repo doesn't exist; try to create it under authenticated user account.
+  try {
+    await axios.post('https://api.github.com/user/repos', {
+      name: repo,
+      private: false,
+      auto_init: true,
+      description: 'A2SV Companion submissions',
+    }, {
+      headers: { Authorization: `token ${token}` },
+    });
+  } catch (err) {
+    const msg = err?.response?.data?.message || err.message;
+    throw new Error(`Repository "${owner}/${repo}" not found and auto-create failed: ${msg}`);
+  }
+}
+
 /**
  * Save code to student's GitHub repo
  * @param {string} token - OAuth token
@@ -15,6 +44,8 @@ async function saveCodeToGitHub(token, owner, repo, path, content, message) {
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
 
   const operation = async () => {
+    await ensureRepoExists(token, owner, repo);
+
     // First, try to get the existing file's SHA (if updating)
     let sha;
     try {

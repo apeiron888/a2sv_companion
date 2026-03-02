@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const Submission = require('../models/Submission');
 const Student = require('../models/Student');
 const Question = require('../models/Question');
+const { findStudentRow } = require('../services/student');
 const { decrypt } = require('../utils/encryption');
 const { saveCodeToGitHub } = require('../services/github');
 const { getSheetsClient } = require('../config/googlesheets');
@@ -19,7 +20,8 @@ async function processQueue() {
     // Find pending submissions, oldest first
     const pending = await Submission.find({ status: 'pending' })
         .sort({ createdAt: 1 })
-        .limit(BATCH_SIZE);
+        .limit(BATCH_SIZE)
+        .lean();
 
     if (pending.length === 0) return;
     console.log(`[queue] Processing ${pending.length} pending submission(s)`);
@@ -31,17 +33,27 @@ async function processQueue() {
         { $set: { status: 'processing' } }
     );
 
+    const processingSubmissions = await Submission.find({ _id: { $in: pendingIds }, status: 'processing' }).lean();
+    if (processingSubmissions.length === 0) return;
+
+    const studentIds = [...new Set(processingSubmissions.map(s => String(s.studentId)).filter(Boolean))];
+    const questionIds = [...new Set(processingSubmissions.map(s => String(s.questionId)).filter(Boolean))];
+
+    const [students, questions] = await Promise.all([
+        Student.find({ _id: { $in: studentIds } }).lean(),
+        Question.find({ _id: { $in: questionIds } }).lean(),
+    ]);
+
+    const studentById = new Map(students.map(s => [String(s._id), s]));
+    const questionById = new Map(questions.map(q => [String(q._id), q]));
+
     // Collect Sheets updates to batch (reduces API quota usage)
     const sheetsUpdates = [];
 
-    for (const submission of pending) {
+    for (const current of processingSubmissions) {
         try {
-            // Re-fetch to make sure we got the processing lock
-            const current = await Submission.findById(submission._id);
-            if (!current || current.status !== 'processing') continue;
-
             // ── 1. Load student with token ─────────────────────────────────────────
-            const student = await Student.findById(current.studentId);
+            const student = studentById.get(String(current.studentId));
             if (!student) {
                 await markError(current, 'Student record no longer exists. Please reconnect GitHub.');
                 continue;
@@ -74,9 +86,9 @@ async function processQueue() {
                     // Retry later
                     await Submission.updateOne(
                         { _id: current._id },
-                        { $set: { status: 'pending', retries: current.retries + 1 } }
+                        { $set: { status: 'pending', retries: (current.retries || 0) + 1 } }
                     );
-                    console.warn(`[queue] GitHub push failed for ${current._id}, retry ${current.retries + 1}: ${errMsg}`);
+                    console.warn(`[queue] GitHub push failed for ${current._id}, retry ${(current.retries || 0) + 1}: ${errMsg}`);
                 } else {
                     await markError(current, `GitHub push failed after ${MAX_RETRIES} retries: ${errMsg}`);
                 }
@@ -89,17 +101,27 @@ async function processQueue() {
             });
 
             // Load question for sheet cell info
-            if (current.questionId) {
-                const question = await Question.findById(current.questionId);
-                if (question) {
-                    sheetsUpdates.push({ submission: current, student, question, htmlUrl });
-                }
+            if (!current.questionId) {
+                await markError(current, 'Question mapping missing for this submission.');
+                continue;
             }
 
+            const question = questionById.get(String(current.questionId));
+            if (!question) {
+                await markError(current, 'Question mapping not found. Please retry after mapping update.');
+                continue;
+            }
+
+            sheetsUpdates.push({ submission: current, student, question, htmlUrl });
+
         } catch (err) {
-            console.error(`[queue] Unexpected error for submission ${submission._id}:`, err.message);
-            await markError(submission, `Internal processing error: ${err.message}`);
+            console.error(`[queue] Unexpected error for submission ${current._id}:`, err.message);
+            await markError(current, `Internal processing error: ${err.message}`);
         }
+    }
+
+    if (sheetsUpdates.length === 0) {
+        return;
     }
 
     // ── 4. Batch Sheets updates ────────────────────────────────────────────────
@@ -116,30 +138,44 @@ async function processQueue() {
         try {
             // Build a single batchUpdate request for all items in this sheet
             const data = [];
-            for (const { submission, student, question } of items) {
+            const successfulSubmissionIds = [];
+            for (const { submission, student, question, htmlUrl } of items) {
                 // We need the student's row number for this tab
-                const rowNumber = student.rowNumber;
-                if (!rowNumber) continue;
+                let rowNumber = student.rowNumber;
+                if (!rowNumber) {
+                    rowNumber = await findStudentRow(student, question.tabName);
+                    if (rowNumber) {
+                        student.rowNumber = rowNumber;
+                    }
+                }
+
+                if (!rowNumber) {
+                    await markError(submission, 'Student row not found in sheet. Check name/email in settings.');
+                    continue;
+                }
 
                 const linkCell = `${question.tabName}!${question.linkCol}${rowNumber}`;
                 const timeCell = `${question.tabName}!${question.timeCol}${rowNumber}`;
                 data.push(
-                    { range: linkCell, values: [[`=HYPERLINK("${items.find(i => i.submission._id.equals(submission._id)).htmlUrl}", "${submission.attempt}")`]] },
+                    { range: linkCell, values: [[`=HYPERLINK("${htmlUrl}", "${submission.attempt}")`]] },
                     { range: timeCell, values: [[submission.timeTaken]] }
                 );
+                successfulSubmissionIds.push(submission._id);
             }
 
-            if (data.length === 0) continue;
+            if (data.length === 0) {
+                continue;
+            }
 
             await sheets.spreadsheets.values.batchUpdate({
                 spreadsheetId: sheetId,
                 requestBody: { valueInputOption: 'USER_ENTERED', data },
             });
 
-            // Mark all as done
-            for (const { submission } of items) {
-                await Submission.updateOne(
-                    { _id: submission._id },
+            // Mark processed subset as done
+            if (successfulSubmissionIds.length > 0) {
+                await Submission.updateMany(
+                    { _id: { $in: successfulSubmissionIds } },
                     { $set: { status: 'done', processedAt: new Date(), code: null } } // Clear stored code after processing
                 );
             }
@@ -163,7 +199,7 @@ async function markError(submission, message) {
 
 // Schedule the queue processor
 const cronEnabled = process.env.QUEUE_CRON_ENABLED !== 'false';
-const cronSchedule = process.env.QUEUE_CRON_SCHEDULE || '*/30 * * * * *'; // every 30 seconds
+const cronSchedule = process.env.QUEUE_CRON_SCHEDULE || '*/10 * * * * *'; // every 10 seconds
 
 if (cronEnabled) {
     cron.schedule(cronSchedule, async () => {
@@ -173,7 +209,7 @@ if (cronEnabled) {
             console.error('[queue] Queue processor crashed:', err.message);
         }
     });
-    console.log('[queue] Submission queue processor started (every 30 s)');
+    console.log('[queue] Submission queue processor started (every 10 s)');
 }
 
 module.exports = { processQueue };
