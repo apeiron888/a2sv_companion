@@ -13,8 +13,26 @@
 </head>
 <body>
   <div class="card">
-    <h1>GitHub Connected</h1>
+    <h1>✅ GitHub Connected</h1>
     <p>Authentication completed successfully. You can close this tab and return to the extension.</p>
+    <p id="status" style="color:#888;font-size:0.9em;">Notifying extension…</p>
   </div>
+  <script>
+    // Notify the extension that OAuth succeeded.
+    // This postMessage approach works in BOTH Chrome and Firefox,
+    // unlike chrome-extension:// redirects which are Chrome-only.
+    try {
+      if (window.opener) {
+        window.opener.postMessage({ type: 'GITHUB_SUCCESS' }, '*');
+        document.getElementById('status').textContent = 'Extension notified. You can close this tab.';
+      } else {
+        document.getElementById('status').textContent = 'You can close this tab and return to the extension.';
+      }
+    } catch (e) {
+      document.getElementById('status').textContent = 'You can close this tab and return to the extension.';
+    }
+    // Auto-close after 3 seconds
+    setTimeout(() => { try { window.close(); } catch (_) {} }, 3000);
+  </script>
 </body>
 </html>

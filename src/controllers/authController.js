@@ -7,6 +7,16 @@ const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const CALLBACK_URL = process.env.GITHUB_CALLBACK_URL;
 
+function getRequestOrigin(req) {
+  const forwardedProto = req.get('x-forwarded-proto');
+  const proto = forwardedProto ? forwardedProto.split(',')[0] : req.protocol;
+  return `${proto}://${req.get('host')}`;
+}
+
+function getCallbackUrl(req) {
+  return CALLBACK_URL || `${getRequestOrigin(req)}/api/auth/github/callback`;
+}
+
 // Redirect user to GitHub for authorization
 exports.githubAuth = async (req, res) => {
   try {
@@ -15,8 +25,8 @@ exports.githubAuth = async (req, res) => {
       return res.status(400).send('Missing email, full name, GitHub handle, or group name (or sheet id)');
     }
 
-    if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET || !CALLBACK_URL) {
-      return res.status(500).send('GitHub OAuth is not configured on the server. Missing GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, or GITHUB_CALLBACK_URL.');
+    if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
+      return res.status(500).send('GitHub OAuth is not configured on the server. Missing GITHUB_CLIENT_ID or GITHUB_CLIENT_SECRET.');
     }
 
     let groupSheetId = rawGroupSheetId;
@@ -43,7 +53,8 @@ exports.githubAuth = async (req, res) => {
       extensionId: req.query.extensionId
     })).toString('base64');
 
-    const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${CALLBACK_URL}&scope=public_repo&state=${state}`;
+    const callbackUrl = getCallbackUrl(req);
+    const url = `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(callbackUrl)}&scope=public_repo&state=${state}`;
     res.redirect(url);
   } catch (error) {
     console.error('GitHub OAuth init error:', error);
@@ -86,12 +97,14 @@ exports.githubCallback = async (req, res) => {
   }
 
   try {
+    const callbackUrl = getCallbackUrl(req);
+
     // Exchange code for access token
     const tokenResponse = await axios.post('https://github.com/login/oauth/access_token', {
       client_id: GITHUB_CLIENT_ID,
       client_secret: GITHUB_CLIENT_SECRET,
       code,
-      redirect_uri: CALLBACK_URL,
+      redirect_uri: callbackUrl,
     }, {
       headers: { Accept: 'application/json' },
     });
@@ -131,26 +144,16 @@ exports.githubCallback = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Build success redirect URL using extensionId
-    if (extensionId) {
-      const successUrl = `chrome-extension://${extensionId}/success.html`;
-      return res.redirect(successUrl);
-    }
-    if (process.env.AUTH_SUCCESS_URL) {
-      return res.redirect(process.env.AUTH_SUCCESS_URL);
-    }
-    return res.send('GitHub connected. You can close this tab and return to the extension.');
+    // Build success redirect - redirect to our backend /auth/success page
+    // The page uses window.opener.postMessage to notify the extension,
+    // which works in BOTH Chrome and Firefox (unlike chrome-extension:// URLs).
+    const baseUrl = process.env.AUTH_SUCCESS_URL || `${req.protocol}://${req.get('host')}/auth/success`;
+    return res.redirect(baseUrl);
   } catch (error) {
     console.error('GitHub OAuth error:', error);
-    if (extensionId) {
-      const errorUrl = `chrome-extension://${extensionId}/error.html`;
-      return res.redirect(errorUrl);
-    }
-    if (process.env.AUTH_ERROR_URL) {
-      return res.redirect(process.env.AUTH_ERROR_URL);
-    }
     const errorDesc = error?.response?.data?.error_description || error?.response?.data?.error || error.message;
-    return res.status(500).send(`GitHub OAuth failed. ${errorDesc || 'Please retry from the extension.'}`);
+    const baseErrorUrl = process.env.AUTH_ERROR_URL || `${req.protocol}://${req.get('host')}/auth/error`;
+    return res.redirect(`${baseErrorUrl}?reason=${encodeURIComponent(errorDesc || 'OAuth failed')}`);
   }
 };
 

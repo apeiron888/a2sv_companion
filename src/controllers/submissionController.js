@@ -1,95 +1,109 @@
-const { getStudentWithToken, findStudentRow } = require('../services/student');
+const { getStudentWithToken } = require('../services/student');
 const { findQuestionByTitle } = require('../services/questionMatcher');
-const { saveCodeToGitHub } = require('../services/github');
-const { getSheetsClient } = require('../config/googlesheets');
 const Submission = require('../models/Submission');
 
+/**
+ * POST /api/submit
+ */
 exports.submit = async (req, res) => {
   try {
-    const { email, platform, problemTitle, problemUrl, code, timeTaken, trial, language } = req.body;
+    const { email, platform, problemTitle, problemSlug, problemUrl, code, timeTaken, trial, language } = req.body;
 
-    // 1. Get student and token
+    // ── Validate required fields ──────────────────────────────────────────────
+    if (!email) {
+      return res.status(400).json({ error: 'Missing email. Please configure your email in the extension options.' });
+    }
+    if (!code) {
+      return res.status(400).json({ error: 'No code received. Try refreshing the page and syncing again.' });
+    }
+
+    // ── 1. Validate student ───────────────────────────────────────────────────
     const student = await getStudentWithToken(email);
     if (!student) {
-      return res.status(404).json({ error: 'Student not found. Please authenticate with GitHub first.' });
+      return res.status(404).json({
+        error: `No account found for ${email}. Please connect GitHub from the extension options page first.`,
+      });
     }
     if (!student.githubTokenDecrypted) {
-      return res.status(401).json({ error: 'GitHub token missing. Please reconnect GitHub.' });
+      return res.status(401).json({
+        error: 'Your GitHub token has expired or is missing. Please click "Reconnect GitHub" in the extension options.',
+      });
     }
 
-    // 2. Find question in mapping for this group
+    // ── 2. Match the question in the group sheet mapping ──────────────────────
     const question = await findQuestionByTitle(student.groupSheetId, problemTitle, problemUrl, platform);
     if (!question) {
-      return res.status(404).json({ error: 'Question not found in any sheet tab. It may not be synced yet.' });
+      return res.status(404).json({
+        error: `Problem "${problemTitle}" is not yet mapped for your group. The mapping updates every 5 minutes — please wait and try again, or ask your TA to ensure this problem is in the sheet.`,
+      });
     }
 
-    // 3. Find student's row in sheet
-    const rowNumber = await findStudentRow(student, question.tabName);
-    if (!rowNumber) {
-      return res.status(404).json({ error: 'Student row not found in sheet.' });
-    }
+    // ── 3. Build file path for GitHub ─────────────────────────────────────────
+    const slug = (problemSlug || problemTitle).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const normalizedPlatform = (platform || 'unknown').toLowerCase();
+    const extMap = {
+      python: 'py', java: 'java', 'c++': 'cpp', javascript: 'js',
+      typescript: 'ts', 'c#': 'cs', go: 'go', kotlin: 'kt', rust: 'rs', php: 'php', swift: 'swift',
+    };
+    const fileExt = extMap[language] || 'txt';
+    const githubPath = `${normalizedPlatform}/${slug}_trial${trial || 1}.${fileExt}`;
 
-    // 4. Prepare GitHub file path
-    const slug = problemTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const normalizedPlatform = platform ? platform.toLowerCase() : 'unknown';
-    const fileExt = language === 'python' ? 'py'
-      : language === 'java' ? 'java'
-      : language === 'c++' ? 'cpp'
-      : language === 'javascript' ? 'js'
-      : language === 'c#' ? 'cs'
-      : language === 'go' ? 'go'
-      : language === 'kotlin' ? 'kt'
-      : language === 'rust' ? 'rs'
-      : language === 'php' ? 'php'
-      : 'txt';
-    const path = `${normalizedPlatform}/${slug}_trial${trial}.${fileExt}`;
-    const commitMessage = `Add solution for ${problemTitle} (trial ${trial})`;
-
-    // 5. Save code to GitHub using student's token
-    const { rawUrl, htmlUrl } = await saveCodeToGitHub(
-      student.githubTokenDecrypted,
-      student.githubUsername,
-      student.repoName,
-      path,
-      code,
-      commitMessage
-    );
-
-    // 6. Update Google Sheet
-    const sheets = getSheetsClient();
-    const sheetId = student.groupSheetId;
-    const tabName = question.tabName;
-    const linkCell = `${tabName}!${question.linkCol}${rowNumber}`;
-    const timeCell = `${tabName}!${question.timeCol}${rowNumber}`;
-
-    // Set link cell as hyperlink formula
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: linkCell,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[`=HYPERLINK("${htmlUrl}", "${trial}")`]] }
-    });
-
-    // Set time cell
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: timeCell,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[timeTaken]] }
-    });
-
-    // 7. Log submission (optional)
-    await Submission.create({
+    // ── 4. Persist submission as 'pending' → return immediately ───────────────
+    const submission = await Submission.create({
       studentId: student._id,
       questionId: question._id,
-      attempt: trial,
-      codeUrl: htmlUrl,
-      timeTaken
+      platform: normalizedPlatform,
+      problemTitle,
+      problemUrl,
+      attempt: trial || 1,
+      timeTaken: timeTaken || 0,
+      language,
+      code,          // stored temporarily; cleared by queue after GitHub push
+      githubPath,
+      status: 'pending',
     });
 
-    res.json({ success: true, rawUrl });
+    // Return 202 Accepted immediately. The queue processor handles GitHub + Sheets.
+    return res.status(202).json({
+      success: true,
+      jobId: submission._id.toString(),
+      message: 'Submission received. GitHub and Google Sheets will be updated within 30 seconds.',
+    });
+
   } catch (error) {
-    console.error('Submission error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Submission controller error:', error);
+    return res.status(500).json({
+      error: 'An unexpected server error occurred. Our team has been notified. Please try again in a minute.',
+    });
+  }
+};
+
+/**
+ * GET /api/submit/status/:jobId
+ *
+ * Allows the extension to poll the status of a specific submission.
+ * The extension calls this ~12 s after receiving the 202 to surface
+ * any background processing errors as user-facing toasts.
+ */
+exports.getSubmitStatus = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!jobId || jobId.length !== 24) {
+      return res.status(400).json({ error: 'Invalid job ID' });
+    }
+    const submission = await Submission.findById(jobId).select('status errorMessage codeUrl htmlUrl processedAt');
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+    return res.json({
+      status: submission.status,
+      errorMessage: submission.errorMessage || null,
+      codeUrl: submission.codeUrl || null,
+      htmlUrl: submission.htmlUrl || null,
+      processedAt: submission.processedAt || null,
+    });
+  } catch (error) {
+    console.error('Status check error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 };

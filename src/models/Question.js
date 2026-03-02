@@ -13,5 +13,9 @@ const questionSchema = new mongoose.Schema({
 
 // Ensure uniqueness per sheet, tab, and link column
 questionSchema.index({ groupSheetId: 1, tabName: 1, linkCol: 1 }, { unique: true });
+// Fast URL-first lookups per group + platform (reduces matching to a small set)
+questionSchema.index({ groupSheetId: 1, platform: 1, problemUrl: 1 });
+// Fast lookups for fuzzy matching per group
+questionSchema.index({ groupSheetId: 1, platform: 1 });
 
 module.exports = mongoose.model('Question', questionSchema);

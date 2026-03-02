@@ -11,8 +11,9 @@ const { githubAuth, githubCallback, githubStatus } = require('./controllers/auth
 // Connect to MongoDB
 connectDB();
 
-// Start cron job for mapping updates
+// Start cron jobs
 require('./jobs/updateMapping');
+require('./jobs/processQueue'); // Async submission queue processor
 
 const app = express();
 
@@ -20,7 +21,7 @@ const app = express();
 app.use(cors({
   origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : '*'
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // Allow larger payloads for code submission
 
 // Serve static files (for admin UI)
 app.use(express.static(path.join(__dirname, '../public')));
@@ -30,7 +31,7 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin.html'));
 });
 
-// Auth status pages
+// Auth status pages (cross-browser OAuth redirect targets)
 app.get('/auth/success', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/success.html'));
 });
@@ -49,10 +50,14 @@ app.get('/api/auth/github', githubAuth);
 app.get('/api/auth/github/callback', githubCallback);
 app.get('/api/auth/github/status', githubStatus);
 
-// Error handling middleware
+// Global error handler — logs context for easier debugging
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  console.error(`[error] ${req.method} ${req.path}`, {
+    body: req.body,
+    message: err.message,
+    stack: err.stack,
+  });
+  res.status(500).json({ error: 'An unexpected server error occurred. Please try again.' });
 });
 
 const PORT = process.env.PORT || 4000;
