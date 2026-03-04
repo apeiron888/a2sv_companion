@@ -140,13 +140,10 @@ async function processQueue() {
             const data = [];
             const successfulSubmissionIds = [];
             for (const { submission, student, question, htmlUrl } of items) {
-                // We need the student's row number for this tab
-                let rowNumber = student.rowNumber;
-                if (!rowNumber) {
-                    rowNumber = await findStudentRow(student, question.tabName);
-                    if (rowNumber) {
-                        student.rowNumber = rowNumber;
-                    }
+                // Always resolve row with validation (handles deleted/moved rows)
+                const rowNumber = await findStudentRow(student, question.tabName);
+                if (rowNumber) {
+                    student.rowNumber = rowNumber;
                 }
 
                 if (!rowNumber) {

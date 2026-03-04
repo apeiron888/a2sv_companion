@@ -33,6 +33,12 @@ async function findStudentRow(student, tabName) {
   const email = (student.email || '').trim().toLowerCase();
   const fullName = (student.fullName || '').trim().toLowerCase();
 
+  const isStudentMatch = (cellValue) => {
+    if (!cellValue) return false;
+    // Prefer matching by name (column A in group sheets), fallback to email.
+    return (fullName && cellValue === fullName) || (email && cellValue === email);
+  };
+
   // If we have a cached row number, verify it first
   if (student.rowNumber) {
     const verifyRange = tabName ? `${tabName}!A${student.rowNumber}` : `A${student.rowNumber}`;
@@ -43,7 +49,7 @@ async function findStudentRow(student, tabName) {
       });
       const cellValueRaw = verifyResponse.data.values?.[0]?.[0];
       const cellValue = cellValueRaw ? String(cellValueRaw).trim().toLowerCase() : '';
-      if ((email && cellValue === email) || (fullName && cellValue === fullName)) {
+      if (isStudentMatch(cellValue)) {
         return student.rowNumber; // cache still valid
       }
     } catch (err) {
@@ -64,7 +70,13 @@ async function findStudentRow(student, tabName) {
     const row = values[i];
     const cellValueRaw = row && row[0] ? row[0] : '';
     const cellValue = cellValueRaw ? String(cellValueRaw).trim().toLowerCase() : '';
-    if ((email && cellValue === email) || (fullName && cellValue === fullName)) {
+
+    // Stop when we hit the first empty student row in column A.
+    if (!cellValue) {
+      break;
+    }
+
+    if (isStudentMatch(cellValue)) {
       const foundRow = i + 1; // 1-based row number
 
       // Update cached row number in database
